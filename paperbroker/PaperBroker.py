@@ -28,7 +28,17 @@ from .logic.validate_account import validate_account
 class PaperBroker():
 
     def __init__(self, quote_adapter:QuoteAdapter=None, account_adapter:AccountAdapter=None, market_adapter:MarketAdapter=None):
-        self.quote_adapter = quote_adapter if quote_adapter is not None else GoogleFinanceQuoteAdapter()
+        
+        if quote_adapter is None:
+            if GoogleFinanceQuoteAdapter is None:
+                raise ImportError(
+                    "No quote_adapter supplied and GoogleFinanceQuoteAdapter "
+                    "is unavailable (googlefinance not installed). "
+                    "Pass a quote_adapter explicitly, e.g. SchwabCallbackQuoteAdapter."
+                )
+            quote_adapter = GoogleFinanceQuoteAdapter()
+        
+        self.quote_adapter = quote_adapter
         self.account_adapter = account_adapter if account_adapter is not None else LocalFileSystemAccountAdapter()
         self.market_adapter = market_adapter if market_adapter is not None else PaperMarketAdapter(self.quote_adapter)
 
@@ -47,8 +57,8 @@ class PaperBroker():
     def get_expiration_dates(self, underlying_asset=None):
         return self.quote_adapter.get_expiration_dates(underlying_asset)
 
-    def open_account(self):
-        account = Account()
+    def open_account(self, positions=None, account_id:str=None, starting_cash:float = None, ledger=None):
+        account = Account(positions=positions, account_id=account_id, starting_cash=starting_cash, ledger=ledger)
         self.account_adapter.put_account(account)
         return account
 
@@ -87,10 +97,10 @@ class PaperBroker():
         return account
 
     def simulate_order(self, account: Account, order: Order, estimator:Estimator=None):
-        account_after = self.market_adapter.simulate_order(account=account, order=order, estimator=estimator)
-        validate_account(account_after)
-        account_after.account_id = account_after.account_id + "_simulated_order"
-        return account_after
+        impact = self.market_adapter.simulate_order(account=account, order=order, estimator=estimator)
+        validate_account(impact.account1)
+        impact.account1.account_id = impact.account1.account_id + "_simulated_order"
+        return impact
 
     def close_position(self, account:Account, position=None, simulate=False):
         return self.close_positions(account, [position], simulate=simulate)

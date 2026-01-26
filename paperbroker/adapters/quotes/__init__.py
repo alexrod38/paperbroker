@@ -1,2 +1,6 @@
 from .QuoteAdapter import QuoteAdapter
-from .GoogleFinanceQuoteAdapter import GoogleFinanceQuoteAdapter
+# Try to import GoogleFinanceQuoteAdapter, but make it optional.
+try:
+    from .GoogleFinanceQuoteAdapter import GoogleFinanceQuoteAdapter
+except Exception:
+    GoogleFinanceQuoteAdapter = None

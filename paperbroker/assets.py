@@ -8,32 +8,64 @@
 
 """
 import arrow
+import re
+from typing import Optional
 
 
-def asset_factory(symbol=None):
+def _norm_symbol(symbol: str) -> str:
+    return re.sub(r"\s+", "", str(symbol).strip().upper())
+
+def asset_factory(symbol=None, service: Optional[str] = None):
     """
-        Create the appropriate asset based on the symbol.
-    :param symbol: Case-insensitive symbol for the asset being created
-    :return: An object that's a subclass of Asset or None
+    Create the appropriate asset based on symbol, and optionally stream service.
+    - If service is provided, it takes precedence for asset class.
+    - If service is None, fall back to original symbol-based logic (options vs Asset).
     """
-
     if symbol is None:
         return None
 
     if isinstance(symbol, Asset):
         return symbol
 
-    symbol = symbol.upper()
+    sym = _norm_symbol(symbol)
+    svc = (service or "").upper()
 
-    if len(symbol) > 8:
-        if 'P0' in symbol:
-            return Put(symbol)
-        elif 'C0' in symbol:
-            return Call(symbol)
-        else:
-            return Option(symbol)
-    else:
-        return Asset(symbol)
+    # --- Service-aware routing (authoritative when present) ---
+    if svc:
+        if svc == "LEVELONE_EQUITIES":
+            return Equity(sym)
+
+        if svc in ("LEVELONE_OPTIONS", "LEVELONE_FUTURE_OPTIONS"):
+            # Let symbol parsing determine Call/Put/Option details
+            # (works for PaperBroker symbols; OCC support lives in Option parsing/normalization)
+            return _option_from_symbol(sym)
+
+#        if svc == "LEVELONE_FUTURES":
+#            return Futures(sym)  # if you add it; otherwise return Asset(sym)
+#
+#        if svc == "LEVELONE_FOREX":
+#            return Forex(sym)    # if you add it; otherwise return Asset(sym)
+
+        # unknown service -> conservative fallback
+        # don't guess; preserve old behavior:
+        # (options vs asset)
+        return _original_symbol_logic(sym)
+
+    # --- Backward-compatible fallback (old behavior) ---
+    return _original_symbol_logic(sym)
+
+
+def _option_from_symbol(sym: str):
+    if "P0" in sym:
+        return Put(sym)
+    if "C0" in sym:
+        return Call(sym)
+    return Option(sym)
+
+def _original_symbol_logic(sym: str):
+    if len(sym) > 8:
+        return _option_from_symbol(sym)
+    return Asset(sym)
 
 """
 Asset: Assets are always identified by a symbol which uniquely identifies the asset and a type.
@@ -57,7 +89,12 @@ class Asset():
         """Define a non-equality test"""
         return not self.__eq__(other)
 
-
+"""
+    Base class for any equities
+"""
+class Equity(Asset):
+    def __init__(self, symbol: str):
+        super().__init__(symbol, asset_type="equity")
 
 """
     Base class for any option derivative
@@ -67,6 +104,7 @@ class Option(Asset):
     def __init__(self, symbol:str = None, underlying=None, option_type:str = None, strike:float = None, expiration_date = None):
 
         if symbol is not None:
+            symbol = re.sub(r"\s+", "", str(symbol).strip().upper())
 
             # if a symbol is provided, then we create the asset based on the symbol
 
@@ -142,4 +180,3 @@ class Call(Option):
     def __init__(self, symbol: str = None, underlying = None,
                  underlying_symbol: str = None, strike: float = None, expiration_date=None):
         super(Call, self).__init__(symbol=symbol, option_type='call', underlying = underlying, strike=strike, expiration_date=expiration_date)
-

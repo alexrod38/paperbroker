@@ -201,10 +201,10 @@ def _group_into_basic_strategies_in_underlying(underlying, positions):
 
     for short_put in short_puts:
 
-        if short_equity.quantity >= 100:
+        if abs(short_equity.quantity) >= 100:
             # if there are enough shares to cover this put, cover it and don't hit margin
             strategies.append(CoveredStrategy(asset=underlying, sell_option=short_put.asset))
-            short_put.quantity -= 100
+            short_equity.quantity += 100
 
         elif len(long_puts) > 0:
             # if there are still any long puts, use them to build spreads
@@ -226,7 +226,7 @@ def _group_into_basic_strategies_in_underlying(underlying, positions):
 def group_into_basic_strategies(positions):
 
     # get a unique list of underlyings
-    underlyings = list(set([_.asset.underlying.symbol for _ in positions if isinstance(_.asset, Option)]))
+    underlyings = list(set([_.asset.underlying for _ in positions if isinstance(_.asset, Option)]))
 
     # add all the strategies for each underlying
     strategies = []

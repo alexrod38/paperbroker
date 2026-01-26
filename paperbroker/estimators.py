@@ -18,7 +18,7 @@ class Estimator:
     """
     def estimate(self, quote:Quote, quantity = None):
 
-        if quote.bid is not None and quote.ask is None and quote.bid > 0.0 and quote.ask > 0.0:
+        if quote.bid is not None and quote.ask is not None and quote.bid > 0.0 and quote.ask > 0.0:
             return round((quote.bid + quote.ask) / 2, 2)
 
         if quote.price is not None:
@@ -59,16 +59,16 @@ class SlippageEstimator(Estimator):
 
     def estimate(self, quote:Quote, quantity:int = None):
 
-        # quantity is only used for direction
-        quantity = copysign(1, quantity)
-
-        if quote.bid is None or quote.ask is None or quote.bid == 0.0 or quote.ask == 0.0:
+        if quote.bid is None or quote.ask is None or quote.bid < 0.0 or quote.ask <= 0.0:
             raise Exception(
-                'SlippageEstimator.estimate: Cannot estimate a price if the bid or ask are None or 0.0')
+                'SlippageEstimator.estimate: Cannot estimate a price if the bid or ask are None, 0.0, or negative')
 
         if quantity is None or quantity == 0:
             raise Exception(
                 'SlippageEstimator.estimate: Must provide a signed quantity to buy or sell.')
+            
+        # quantity is only used for direction
+        quantity = copysign(1, quantity)
 
         spread = (quote.ask - quote.bid) / 2
         midpoint = quote.bid + spread

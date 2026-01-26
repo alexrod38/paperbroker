@@ -1,11 +1,12 @@
 from ...accounts import Account, account_factory
+from .AccountAdapter import AccountAdapter
 import tempfile
 import os
 import pickle
 from os import listdir
 from os.path import isfile, join
 
-class LocalFileSystemAccountAdapter():
+class LocalFileSystemAccountAdapter(AccountAdapter):
 
     def __init__(self, root=None):
         if root is None: root = tempfile.gettempdir()
@@ -18,11 +19,7 @@ class LocalFileSystemAccountAdapter():
             return pickle.load(file=f)
 
     def has_account(self, account_id: str, current_date=None):
-        try:
-            pickle.load(file=self.root + "/accounts/" + account_id + ".pickle")
-            return True
-        except:
-            return False
+        return os.path.exists(self.root + "/accounts/" + account_id + ".pickle")
 
     def put_account(self, account: Account, current_date=None):
         with open(self.root + "/accounts/" + account.account_id + ".pickle", 'wb') as f:

@@ -4,9 +4,13 @@
 #
 ###############################
 
-import ivolat3
+# Try to import ivolat3; if not available, we’ll gracefully degrade.
+try:
+    import ivolat3
+except ImportError:
+    ivolat3 = None
 
-def get_option_greeks(option_type, strike, underlying_price, days_to_expiration, price, dividend = 0.0):
+def get_option_greeks(option_type, strike, underlying_price, days_to_expiration, price, risk_free_rate=0.02, dividend = 0.0):
 
     out = {
         "iv": None,
@@ -32,13 +36,20 @@ def get_option_greeks(option_type, strike, underlying_price, days_to_expiration,
     if days_to_expiration is None or days_to_expiration <= 0: return out
     if price is None: return out
     if dividend is None: dividend = 0.0
+    
+    # If ivolat3 isn’t available, just bail and return the blank greeks.
+    if ivolat3 is None:
+        # You can add a logging.warning here if you like
+        return out
+    
+    
 
     # stock price
     s = underlying_price
     # option strike price
     k = strike
     # risk-free interest rate
-    r = days_to_expiration / 365 * 0.02 # (2% treasury rate)
+    r = risk_free_rate # (2% treasury rate)
     # drift rate (dividend)
     q = dividend
     # time remaining until expiration (in years)
@@ -76,8 +87,8 @@ def get_option_greeks(option_type, strike, underlying_price, days_to_expiration,
     out['vanna'] = ivolat3.vanna(s, k, r, q, t, sigma)
     out['charm'] = (ivolat3.charm_call(s, k, r, q, t, sigma) if \
         option_type == 'call' else ivolat3.charm_put(s, k, r, q, t, sigma)) / 365
-    out['speed'] = ivolat3.speed(s, k, r, q, t, sigma) / 365
-    out['zomma'] = ivolat3.zomma(s, k, r, q, t, sigma) / 365
+    out['speed'] = ivolat3.speed(s, k, r, q, t, sigma)
+    out['zomma'] = ivolat3.zomma(s, k, r, q, t, sigma)
     out['color'] = ivolat3.color(s, k, r, q, t, sigma) / (365)
     out['veta'] = ivolat3.DvegaDtime(s, k, r, q, t, sigma) / (100 * 365)
     out['vomma'] = ivolat3.vomma(s, k, r, q, t, sigma)

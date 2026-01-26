@@ -9,6 +9,7 @@ from .MarketAdapter import MarketAdapter
 from ...logic.fill_order import fill_order
 from ...logic.close_expired_options import close_expired_options
 from ...OrderImpact import OrderImpact
+from ...oco import OCOGroup
 
 class PendingOrder():
     def __init__(self, order: Order = None, account: Account = None, estimator: Estimator=None):
@@ -30,25 +31,48 @@ class PaperMarketAdapter(MarketAdapter):
     # fill any open orders that the broker knows about
     # # if it is possible to fill the order
     # and then cancel everything that was left
-    def fill_pending_orders(self, cancel_on_failure = True):
+    def fill_pending_orders(self, cancel_on_failure = False):
+        new_pending = []
+    
         for pending_order in self.pending_orders:
             try:
-
-                #actually fill the order
-                fill_order(account=pending_order.account,
-                        order = pending_order.order,
+                obj = pending_order.order
+    
+                # If this is an OCO group
+                if isinstance(obj, OCOGroup):
+                    finished = obj.evaluate(
+                        account=pending_order.account,
                         quote_adapter=self.quote_adapter,
-                        estimator=pending_order.estimator)
-
-                pending_order.order.status = 'filled'
-
+                        estimator=pending_order.estimator
+                    )
+                    # keep group pending if still active
+                    if not finished and obj.is_active:
+                        new_pending.append(pending_order)
+    
+                else:
+                    # Normal single order
+                    fill_order(
+                        account=pending_order.account,
+                        order=obj,
+                        quote_adapter=self.quote_adapter,
+                        estimator=pending_order.estimator
+                    )
+    
+                    if obj.status == "open":
+                        new_pending.append(pending_order)
+    
             except Exception as e:
+                # mark underlying order/group as failed
                 pending_order.order.status = 'failed'
                 print("Order failed to execute")
                 print(e)
-                pass
-
-        self.pending_orders = [_ for _ in self.pending_orders if _.order.status != 'filled']
+                if not cancel_on_failure:
+                    # keep it around unless we're nuking all failures
+                    new_pending.append(pending_order)
+                # if cancel_on_failure, we just don't re-append
+    
+        # Replace pending list with survivors
+        self.pending_orders = [] if cancel_on_failure else new_pending
 
         if cancel_on_failure:
             self.pending_orders = []
@@ -63,7 +87,11 @@ class PaperMarketAdapter(MarketAdapter):
 
         # force fill copies of any open orders against copies of this account
         for pending_order in [_ for _ in self.pending_orders if _.account == account]:
-            account_copy = fill_order(account=account_copy, order=deepcopy(pending_order.order), estimator=estimator, quote_adapter=self.quote_adapter)
+            obj = deepcopy(pending_order.order)
+            if isinstance(obj, OCOGroup):
+                obj.evaluate(account=account_copy, quote_adapter=self.quote_adapter, estimator=estimator)
+            else:
+                account_copy = fill_order(account=account_copy, order=obj, estimator=estimator, quote_adapter=self.quote_adapter)
 
         # now fill this order against a copy of the account
         fill_order(account=account_copy, order=order_copy, estimator=estimator, quote_adapter=self.quote_adapter)
@@ -77,5 +105,4 @@ class PaperMarketAdapter(MarketAdapter):
         if auto_fill:
             self.fill_pending_orders()
         return account
-
 

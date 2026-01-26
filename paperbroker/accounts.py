@@ -17,11 +17,12 @@ def account_factory(account):
 
 class Account():
 
-    def __init__(self, positions=None, account_id:str=None):
+    def __init__(self, positions=None, account_id:str=None, starting_cash:float = None, ledger=None):
         self.account_id = account_id if account_id is not None else 'account' + ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10))
-        self.cash = 10000
+        self.cash = starting_cash if starting_cash is not None else 10000
         self.maintenance_margin = 0.0
         self.positions = positions if positions is not None else []
+        self.ledger = ledger if ledger is not None else []
 
 
 

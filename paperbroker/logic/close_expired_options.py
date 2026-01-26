@@ -17,7 +17,7 @@ from ..positions import Position
 
 from ..adapters.markets import MarketAdapter
 
-from copy import copy
+# from copy import copy
 from math import copysign
 
 
@@ -56,7 +56,7 @@ def close_expired_options(account:Account, quote_adapter:QuoteAdapter, market_ad
     # the effect of an options expiration can be thought of as an option transaction that was forced to take place
     # at exactly its intrinsic value, along with its resulting position
     # we simulate this by processing an order to make that happen
-    starting_account = copy(account)
+    # starting_account = copy(account)
 
     # no positions, bail
     if len(account.positions) == 0:
@@ -75,7 +75,7 @@ def close_expired_options(account:Account, quote_adapter:QuoteAdapter, market_ad
         return
 
     # get a unique list of underlyings
-    underlyings = list(set([_.asset.underlying.symbol for _ in expired]))
+    underlyings = list({_.asset.underlying for _ in expired})
 
     # iterate through them
     for underlying in underlyings:
@@ -84,12 +84,13 @@ def close_expired_options(account:Account, quote_adapter:QuoteAdapter, market_ad
         underlying_quote = quote_adapter.get_quote(underlying)
 
         # get the positions in or of this underlying
-        positions_in_underlying = [_ for _ in account.positions if (isinstance(_.asset, Option) and _.asset.underlying == underlying) or (_.asset == underlying)]
+        positions_in_underlying = [p for p in account.positions if (isinstance(p.asset, Option) and p.asset.underlying == underlying) or (p.asset == underlying)]
 
         # make a list of the positions of expiring options in this underlying
-        expired_positions = [_ for _ in account.positions
-                   if isinstance(_.asset, Option)
-                   and arrow.get(_.asset.expiration_date).format('YYYY-MM-DD') <
+        expired_positions = [p for p in account.positions
+                   if isinstance(p.asset, Option)
+                   and p.asset.underlying.symbol == underlying.symbol
+                   and arrow.get(p.asset.expiration_date).format('YYYY-MM-DD') <
                     arrow.get(current_date).format('YYYY-MM-DD')
                    ]
 
@@ -107,7 +108,9 @@ def close_expired_options(account:Account, quote_adapter:QuoteAdapter, market_ad
         for position in expired_positions:
 
             # figure out if the option is ITM
-            is_itm = position.asset.get_intrinsic_value(underlying_price=underlying_quote.price) > 0
+            intrinsic = position.asset.get_intrinsic_value(underlying_price=underlying_quote.price)
+            
+            is_itm = intrinsic is not None and intrinsic > 0
 
             if not is_itm:
                 # if the option is not in the money, it expired worthless, force it to dissapear
@@ -133,11 +136,12 @@ def close_expired_options(account:Account, quote_adapter:QuoteAdapter, market_ad
 
                     # iterate through each quantity to make the code simpler
                     for x in range(abs(position.quantity)):
-                        if long_equity > 100:
+                        if long_equity >= 100:
                             # there is stock available to surrender
                             # drain 100 shares
                             drain_asset(positions=account.positions, asset=position.asset.underlying, quantity=-100)
                             long_equity -= 100
+                            account.cash += position.asset.strike * 100
                         else:
                             # there is not enough stock, so subtract enough cash to buy the shares
                             account.cash -= underlying_quote.price * 100
@@ -157,17 +161,18 @@ def close_expired_options(account:Account, quote_adapter:QuoteAdapter, market_ad
                     # iterate through each quantity to make the code simpler
 
                     for x in range(abs(position.quantity)):
-                        if short_equity < -100:
+                        if short_equity <= -100:
                             # we have short equity to give up
                             # drain 100 shares
                             drain_asset(positions=account.positions, asset=position.asset.underlying, quantity=100)
-                            account.cash -= underlying_quote.price * 100
+                            account.cash -= position.asset.strike * 100
                             short_equity += 100
                         else:
                             # there is not enough short available, so you get to buy some shares, so take the cash
-                            account.cash -= underlying_quote.price * 100
+                            account.positions.append(Position(asset=underlying, quantity=100, cost_basis=position.asset.strike - abs(position.cost_basis)))
+                            long_equity += 100
                             # and give it back
-                            account.cash += position.asset.strike * 100
+                            account.cash -= position.asset.strike * 100
 
 
             position.quantity = 0
