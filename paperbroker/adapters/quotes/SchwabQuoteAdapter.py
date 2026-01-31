@@ -48,6 +48,7 @@ class SchwabCallbackQuoteAdapter(QuoteAdapter):
         self._option_quotes = {}   # normalized option symbol -> OptionQuote
         self._other_quotes = {}    # other quotes
         self._last_ts = {}         # symbol -> timestamp (as provided)
+        self._raw_cache = {}       # symbol -> dict
 
     def on_market_data(self, data: dict):
         service = (data.get("service") or "").upper()
@@ -58,6 +59,26 @@ class SchwabCallbackQuoteAdapter(QuoteAdapter):
         # 🚫 Ignore chart and non-quote services
         if not service.startswith("LEVELONE"):
             return
+        
+        sym_key = str(raw_symbol).upper()
+
+        # --- Sticky-field merge: keep last values unless we get new ones ---
+        with self._lock:
+            prev = self._raw_cache.get(sym_key)
+            if prev is None:
+                # first time we've ever seen this symbol: start with this packet
+                merged = dict(data)
+            else:
+                merged = dict(prev)
+                # only overwrite fields that are explicitly present;
+                # treat None as "no update", but keep 0.0 as a real update.
+                for k, v in data.items():
+                    if v is not None:
+                        merged[k] = v
+            self._raw_cache[sym_key] = merged
+
+        # from here on, use merged as *the* payload
+        data = merged
         
         def _num(x):
             try:
@@ -95,7 +116,7 @@ class SchwabCallbackQuoteAdapter(QuoteAdapter):
         strike = _num(data.get("Strike Price") or data.get("Strike"))
         contract_type = data.get("Contract Type")  # if present
     
-        quote_date = arrow.get(data["timestamp"]).format("YYYY-MM-DD")
+        quote_date = arrow.get(data["timestamp"]).format("YYYY-MM-DD HH:MM")
     
         q = quote_factory_from_service(
             service=service,

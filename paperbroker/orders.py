@@ -7,6 +7,9 @@
 from math import copysign
 from .assets import Asset, asset_factory
 from .quotes import Quote
+import itertools
+
+_order_counter = itertools.count(1)
 
 class Leg(object):
     def __init__(self, asset: Asset, quantity: int, order_type: str, price: float = None):
@@ -33,7 +36,8 @@ class Leg(object):
 
 
 class Order(object):
-    def __init__(self, legs = None, price=None, condition='market', trail = 0.0, trail_is_percent = False):
+    def __init__(self, legs = None, price=None, condition='market', trail = 0.0, trail_is_percent = False, trail_best=None, status='open', time_in_force='day'):
+        self.order_id = f"PB-{next(_order_counter)}"
         self.legs = legs if legs is not None else []
         self.status = 'open'
         self.price = float(price) if price is not None else None
@@ -43,11 +47,12 @@ class Order(object):
                 raise ValueError("Order Rejected: if using condition = 'trailing_stop', then trail must be positve non-zero.")
             self.trail = trail
             self.trail_is_percent = trail_is_percent
-            self.trail_best = None
+            self.trail_best = trail_best
         else:
             self.trail = 0
             self.trail_is_percent = False
-            self.trail_best = None
+            self.trail_best = status
+            self.time_in_force = time_in_force
         
 
     def duplicate(self, times=1):
