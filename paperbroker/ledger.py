@@ -53,6 +53,20 @@ class LedgerEntry:
     # Position context (optional but handy)
     position_qty_before: Optional[float]
     position_qty_after: Optional[float]
+    
+    # Quote snapshot (what we *saw* when filling)
+    quote_price: Optional[float] = None   # mid/mark/last as provided by Quote
+    quote_bid: Optional[float] = None
+    quote_ask: Optional[float] = None
+    
+    # Fees / commissions
+    commission: float = 0.0              # e.g. options $0.65/contract
+    fees: float = 0.0                    # placeholder for other fees (reg/exchange, etc.)
+    fees_total: float = 0.0              # commission + fees
+    
+    # Cash breakdown
+    trade_cash: float = 0.0              # cash change excluding fees (execution only)
+    net_cash: float = 0.0                # cash change including fees (trade_cash - fees_total)
 
     def to_dict(self) -> dict:
         """Convenience for turning entries into dicts (for DataFrames, CSV, etc.)."""

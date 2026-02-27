@@ -116,7 +116,7 @@ class SchwabCallbackQuoteAdapter(QuoteAdapter):
         strike = _num(data.get("Strike Price") or data.get("Strike"))
         contract_type = data.get("Contract Type")  # if present
     
-        quote_date = arrow.get(data["timestamp"]).format("YYYY-MM-DD HH:MM")
+        quote_date = arrow.get(data["timestamp"]).format("YYYY-MM-DD HH:mm:ss")
     
         q = quote_factory_from_service(
             service=service,
@@ -129,6 +129,17 @@ class SchwabCallbackQuoteAdapter(QuoteAdapter):
             days_to_exp=days_to_exp, intrensic=intrensic, strike=strike,
             contract_type=contract_type,
         )
+        # Fallback: compute days_to_exp from the option's expiration_date if the stream omits it
+        try:
+            if getattr(q, "quote_type", None) == "option" and getattr(q, "days_to_exp", None) is None:
+                exp = getattr(getattr(q, "asset", None), "expiration_date", None)
+                if exp:
+                    # exp is typically 'YYYY-MM-DD' from asset_factory parsing
+                    exp_day = arrow.get(exp).floor("day")
+                    now_day = arrow.utcnow().to("US/Eastern").floor("day")
+                    q.days_to_exp = int((exp_day - now_day).days)
+        except Exception:
+            pass
     
         sym = q.asset.symbol.upper()  # canonical normalized symbol from asset_factory(service=...)
         with self._lock:

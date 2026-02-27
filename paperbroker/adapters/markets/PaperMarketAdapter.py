@@ -99,7 +99,7 @@ class PaperMarketAdapter(MarketAdapter):
         return OrderImpact(account0 = account, account1 = account_copy, order = order_copy, actual_commission = None, actual_fill_price = None)
 
 
-    def enter_order(self, account: Account, order: Order, estimator:Estimator=None, auto_fill=True):
+    def enter_order(self, account: Account, order: Order, estimator:Estimator=None, auto_fill=False):
         estimator = estimator if estimator is not None else self.estimator
         self.pending_orders.append(PendingOrder(account=account, order=order, estimator=estimator))
         if auto_fill:

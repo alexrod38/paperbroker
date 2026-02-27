@@ -88,6 +88,12 @@ class Asset():
     def __ne__(self, other):
         """Define a non-equality test"""
         return not self.__eq__(other)
+    
+    def __hash__(self):
+        # Must be consistent with __eq__.
+        # Include class so Equity("AAPL") and Asset("AAPL") don't collide,
+        # matching your __eq__ behavior (only equal within same class).
+        return hash((self.__class__, self.symbol))
 
 """
     Base class for any equities
@@ -137,7 +143,7 @@ class Option(Asset):
             try:
                 expiration_date = arrow.get(expiration_date).format('YYMMDD')
             except Exception as e:
-                raise Exception('Option(Asset): expiration_date is invalid')
+                raise Exception(f'Option(Asset) | {e}: expiration_date is invalid')
 
             # build the symbol
             symbol = (underlying.symbol + expiration_date + option_type[0] + str(int(round(strike, 2) * 1000)).zfill(8)).upper()
